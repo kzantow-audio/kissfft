@@ -22,7 +22,15 @@ static
 kiss_fft_scalar rand_scalar(void) 
 {
 #ifdef USE_SIMD
+#ifdef HAVE_LASX
+    float tmp = rand()-RAND_MAX/2;
+    return (__m256)(__lasx_xvldrepl_w(&tmp, 0));
+#elif defined(HAVE_LSX)
+    float tmp = rand()-RAND_MAX/2;
+    return (__m128)(__lsx_vldrepl_w(&tmp, 0));
+#else
     return _mm_set1_ps(rand()-RAND_MAX/2);
+#endif
 #else
     kiss_fft_scalar s = (kiss_fft_scalar)(rand() -RAND_MAX/2);
     return s/2;
@@ -77,8 +85,13 @@ int main(int argc,char ** argv)
     int nfft = 8*3*5;
     double ts,tfft,trfft;
     int i;
-    if (argc>1)
+    if (argc>1) {
         nfft = atoi(argv[1]);
+        if (nfft <= 0) {
+            fprintf(stderr,"Error: nfft must be a positive integer\n");
+            return 1;
+        }
+    }
     kiss_fft_cpx cin[nfft];
     kiss_fft_cpx cout[nfft];
     kiss_fft_cpx sout[nfft];

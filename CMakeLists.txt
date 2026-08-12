@@ -105,9 +105,7 @@ endif()
 # Add GNUInstallDirs for GNU infrastructure before target)include_directories
 #
 
-if(CMAKE_SYSTEM_NAME MATCHES "^(Linux|kFreeBSD|GNU)$" AND NOT CMAKE_CROSSCOMPILING)
-    include(GNUInstallDirs)
-endif()
+include(GNUInstallDirs)
 
 #
 # Declare PKGINCLUDEDIR for kissfft include path
@@ -167,7 +165,13 @@ else()
 
             if(KISSFFT_DATATYPE MATCHES "^simd$")
                 list(APPEND KISSFFT_COMPILE_DEFINITIONS USE_SIMD)
-                if (NOT MSVC)
+                if(HAVE_LASX)
+                    list(APPEND KISSFFT_COMPILE_DEFINITIONS HAVE_LASX)
+                    target_compile_options(kissfft PRIVATE -mlasx)
+                elseif(HAVE_LSX)
+                    list(APPEND KISSFFT_COMPILE_DEFINITIONS HAVE_LSX)
+                    target_compile_options(kissfft PRIVATE -mlsx)
+                elseif(NOT MSVC)
                     target_compile_options(kissfft PRIVATE -msse)
                 else()
                     target_compile_options(kissfft PRIVATE "/arch:SSE")
@@ -239,10 +243,10 @@ add_library(kissfft::kissfft ALIAS kissfft)
 add_library(kissfft::kissfft-${KISSFFT_DATATYPE} ALIAS kissfft)
 
 #
-# Build with libm (-lm) on Linux and kFreeBSD
+# Build with libm (-lm) on Unix
 #
 
-if(CMAKE_SYSTEM_NAME MATCHES "^(Linux|kFreeBSD|GNU)$" AND NOT CMAKE_CROSSCOMPILING)
+if(UNIX AND NOT CMAKE_CROSSCOMPILING)
     target_link_libraries(kissfft PRIVATE m)
 endif()
 
@@ -255,11 +259,18 @@ function(add_kissfft_executable NAME)
     target_link_libraries(${NAME} PRIVATE kissfft::kissfft)
 
     #
-    # Build with libm (-lm) on Linux and kFreeBSD
+    # Build with libm (-lm) on Unix
     #
 
-    if(CMAKE_SYSTEM_NAME MATCHES "^(Linux|kFreeBSD|GNU)$" AND NOT CMAKE_CROSSCOMPILING)
+    if(UNIX AND NOT CMAKE_CROSSCOMPILING)
         target_link_libraries(${NAME} PRIVATE m)
+    endif()
+
+    if(HAVE_LASX)
+      target_compile_options(${NAME} PRIVATE -mlasx)
+    endif()
+    if(HAVE_LSX)
+      target_compile_options(${NAME} PRIVATE -mlsx)
     endif()
 
     if (NOT KISSFFT_OPENMP)
@@ -329,7 +340,11 @@ if (KISSFFT_PKGCONFIG)
     join_paths(PKGCONFIG_KISSFFT_INCLUDEDIR "\${prefix}" "${CMAKE_INSTALL_INCLUDEDIR}")
     if(KISSFFT_DATATYPE MATCHES "^simd$")
        list(APPEND KISSFFT_COMPILE_DEFINITIONS USE_SIMD)
-       if (NOT MSVC)
+       if(HAVE_LASX)
+         set(PKG_KISSFFT_DEFS "${PKG_KISSFFT_DEFS} -mlasx")
+       elseif(HAVE_LSX)
+         set(PKG_KISSFFT_DEFS "${PKG_KISSFFT_DEFS} -mlsx")
+       elseif(NOT MSVC)
            set(PKG_KISSFFT_DEFS "${PKG_KISSFFT_DEFS} -msse")
        else()
            set(PKG_KISSFFT_DEFS "${PKG_KISSFFT_DEFS} /ARCH:SSE")

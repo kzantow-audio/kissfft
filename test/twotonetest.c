@@ -38,8 +38,16 @@ double two_tone_test( int nfft, int bin1,int bin2)
     /* generate a signal with two tones*/
     for (i = 0; i < nfft; i++) {
 #ifdef USE_SIMD
+#ifdef HAVE_LASX
+        float tmp = (maxrange>>1)*cos(f1*i) + (maxrange>>1)*cos(f2*i);
+        tbuf[i] = (__m256)__lasx_xvldrepl_w(&tmp, 0);
+#elif defined(HAVE_LSX)
+        float tmp = (maxrange>>1)*cos(f1*i) + (maxrange>>1)*cos(f2*i);
+        tbuf[i] = (__m128)__lsx_vldrepl_w(&tmp, 0);
+#else
         tbuf[i] = _mm_set1_ps( (maxrange>>1)*cos(f1*i)
                              + (maxrange>>1)*cos(f2*i) );
+#endif
 #else        
         tbuf[i] =  (maxrange>>1)*cos(f1*i)
                  + (maxrange>>1)*cos(f2*i);
@@ -67,6 +75,9 @@ double two_tone_test( int nfft, int bin1,int bin2)
             sigpow += mag2;
     }
     kiss_fft_cleanup();
+    free(cfg);
+    free(tbuf);
+    free(kout);
     /*printf("TEST %d,%d,%d noise @ %fdB\n",nfft,bin1,bin2,10*log10(noisepow/sigpow +1e-30) );*/
     return 10*log10(sigpow/(noisepow+1e-50) );
 }
@@ -74,7 +85,13 @@ double two_tone_test( int nfft, int bin1,int bin2)
 int main(int argc,char ** argv)
 {
     int nfft = 4*2*2*3*5;
-    if (argc>1) nfft = atoi(argv[1]);
+    if (argc>1) {
+        nfft = atoi(argv[1]);
+        if (nfft <= 0) {
+            fprintf(stderr,"Error: nfft must be a positive integer\n");
+            return 1;
+        }
+    }
 
     int i,j;
     double minsnr = 500;
